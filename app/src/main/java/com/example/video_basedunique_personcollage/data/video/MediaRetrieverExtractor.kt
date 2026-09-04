@@ -31,7 +31,7 @@ class MediaRetrieverExtractor(private val context: Context) : VideoFrameExtracto
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         } finally {
             retriever.release()
