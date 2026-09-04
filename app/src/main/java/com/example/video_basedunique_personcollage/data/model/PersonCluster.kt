@@ -10,5 +10,5 @@ data class PersonCluster(
     var appearanceCount: Int = 1
 ) {
     val representativeBitmap: Bitmap?
-        get() = faceResults.firstOrNull()?.bitmap
+        get() = faceResults.firstOrNull()?.croppedBitmap
 }
