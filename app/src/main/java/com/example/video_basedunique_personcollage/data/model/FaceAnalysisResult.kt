@@ -13,5 +13,6 @@ data class FaceAnalysisResult(
     val headEulerAngleX: Float,
     val headEulerAngleY: Float,
     val headEulerAngleZ: Float,
-    val timestampMs: Long
+    val timestampMs: Long,
+    var embedding: FloatArray? = null // Populated by FaceEmbedder
 )
