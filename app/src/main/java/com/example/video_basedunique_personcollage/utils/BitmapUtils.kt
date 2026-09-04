@@ -32,4 +32,12 @@ object BitmapUtils {
 
         return Bitmap.createBitmap(bitmap, left, top, cropWidth, cropHeight)
     }
+
+    /**
+     * Resizes a face bitmap to the exact target dimensions (default 112x112) required by the MobileFaceNet model.
+     * Uses bilinear filtering for smooth scaling.
+     */
+    fun resizeForEmbedding(bitmap: Bitmap, targetSize: Int = 112): Bitmap {
+        return Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
+    }
 }
