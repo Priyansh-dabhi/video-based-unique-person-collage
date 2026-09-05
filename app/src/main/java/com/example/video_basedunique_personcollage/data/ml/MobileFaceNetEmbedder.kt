@@ -2,6 +2,7 @@ package com.example.video_basedunique_personcollage.data.ml
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import com.example.video_basedunique_personcollage.domain.ml.FaceEmbedder
 import com.example.video_basedunique_personcollage.utils.BitmapUtils
 import org.tensorflow.lite.Interpreter
@@ -20,6 +21,7 @@ class MobileFaceNetEmbedder(
     private val embeddingSize: Int
 
     companion object {
+        private const val TAG = "MobileFaceNetEmbedder"
         private const val INPUT_SIZE = 112
         private const val IMAGE_MEAN = 127.5f
         private const val IMAGE_STD = 128.0f
@@ -34,10 +36,11 @@ class MobileFaceNetEmbedder(
         interpreter = tflite
 
         val inShape = tflite.getInputTensor(0).shape()
-        batchSize = if (inShape.isNotEmpty() && inShape[0] > 0) inShape[0] else 1
+        batchSize = if (inShape.isNotEmpty() && inShape[0] > 0) inShape[0] else 2
 
         val outShape = tflite.getOutputTensor(0).shape()
         embeddingSize = if (outShape.isNotEmpty() && outShape.last() > 0) outShape.last() else 192
+        Log.d(TAG, "Initialized embedder with batchSize=$batchSize, embeddingSize=$embeddingSize")
     }
 
     override fun generateEmbedding(faceBitmap: Bitmap): FloatArray {
@@ -54,7 +57,7 @@ class MobileFaceNetEmbedder(
         val intValues = IntArray(INPUT_SIZE * INPUT_SIZE)
         resizedBitmap.getPixels(intValues, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
 
-        // Fill buffer for each batch slot (e.g. batch size 2)
+        // Fill buffer for each batch slot (batch size 1)
         for (b in 0 until batchSize) {
             for (pixel in intValues) {
                 val r = (pixel shr 16 and 0xFF)
