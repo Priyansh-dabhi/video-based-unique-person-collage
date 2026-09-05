@@ -7,15 +7,20 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.graphics.Bitmap
 import com.example.video_basedunique_personcollage.data.clustering.FaceClusterer
+import com.example.video_basedunique_personcollage.data.collage.CollageGenerator
+import com.example.video_basedunique_personcollage.data.ml.FaceNetEmbedder
 import com.example.video_basedunique_personcollage.data.ml.MlKitFaceDetectorImpl
 import com.example.video_basedunique_personcollage.data.ml.MobileFaceNetEmbedder
+import com.example.video_basedunique_personcollage.data.model.CollageStyle
 import com.example.video_basedunique_personcollage.data.model.FaceAnalysisResult
 import com.example.video_basedunique_personcollage.data.model.PersonCluster
-import com.example.video_basedunique_personcollage.data.video.MediaRetrieverExtractor
+import com.example.video_basedunique_personcollage.data.video.MediaCodecVideoExtractor
 import com.example.video_basedunique_personcollage.domain.ml.FaceDetector
 import com.example.video_basedunique_personcollage.domain.ml.FaceEmbedder
 import com.example.video_basedunique_personcollage.domain.video.VideoFrameExtractor
+import com.example.video_basedunique_personcollage.utils.CollageExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,12 +47,26 @@ class MainViewModel(
     private val _statusMessage = MutableStateFlow("")
     val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
+    private val _collageBitmap = MutableStateFlow<Bitmap?>(null)
+    val collageBitmap: StateFlow<Bitmap?> = _collageBitmap.asStateFlow()
+
+    private val _selectedCollageStyle = MutableStateFlow(CollageStyle.MODERN_GRID)
+    val selectedCollageStyle: StateFlow<CollageStyle> = _selectedCollageStyle.asStateFlow()
+
+    private val _isGeneratingCollage = MutableStateFlow(false)
+    val isGeneratingCollage: StateFlow<Boolean> = _isGeneratingCollage.asStateFlow()
+
+    private val _exportMessage = MutableStateFlow<String?>(null)
+    val exportMessage: StateFlow<String?> = _exportMessage.asStateFlow()
+
     fun processVideo(uri: Uri) {
         viewModelScope.launch {
             _isProcessing.value = true
             _statusMessage.value = "Analyzing video frames..."
             _clusters.value = emptyList()
             _extractedFaces.value = emptyList()
+            _collageBitmap.value = null
+            _exportMessage.value = null
 
             val allFaces = mutableListOf<FaceAnalysisResult>()
 
@@ -55,7 +74,7 @@ class MainViewModel(
                 withContext(Dispatchers.Default) {
                     var frameCount = 0
                     // Step 1: Extract frames & detect faces & compute embeddings
-                    videoFrameExtractor.extractFrames(uri, 333L).collect { frame ->
+                    videoFrameExtractor.extractFrames(uri, 500L).collect { frame ->
                         frameCount++
                         val detectedFaces = faceDetector.detectFaces(frame)
 
@@ -72,7 +91,9 @@ class MainViewModel(
                         _statusMessage.value = "Processed $frameCount frames (${allFaces.size} faces found)..."
                         
                         // Free the heavy original frame from memory to prevent OutOfMemoryError
-                        frame.bitmap.recycle()
+                        if (!frame.bitmap.isRecycled) {
+                            frame.bitmap.recycle()
+                        }
                     }
 
                     // Step 2: Cluster faces by identity & calculate appearances
@@ -98,6 +119,40 @@ class MainViewModel(
         }
     }
 
+    fun generateCollage(style: CollageStyle = _selectedCollageStyle.value) {
+        val currentClusters = _clusters.value
+        if (currentClusters.isEmpty()) return
+
+        viewModelScope.launch {
+            _isGeneratingCollage.value = true
+            _selectedCollageStyle.value = style
+            val bitmap = withContext(Dispatchers.Default) {
+                CollageGenerator.generateCollage(currentClusters, style)
+            }
+            _collageBitmap.value = bitmap
+            _isGeneratingCollage.value = false
+        }
+    }
+
+    fun saveCollageToGallery(context: Context) {
+        val bitmap = _collageBitmap.value ?: return
+        val result = CollageExporter.saveToGallery(context, bitmap)
+        if (result.isSuccess) {
+            _exportMessage.value = "Saved to Gallery in Pictures/UniquePersonCollage!"
+        } else {
+            _exportMessage.value = "Failed to save: ${result.exceptionOrNull()?.message}"
+        }
+    }
+
+    fun shareCollage(context: Context) {
+        val bitmap = _collageBitmap.value ?: return
+        CollageExporter.shareCollage(context, bitmap)
+    }
+
+    fun clearExportMessage() {
+        _exportMessage.value = null
+    }
+
     override fun onCleared() {
         super.onCleared()
         faceEmbedder.close()
@@ -107,9 +162,9 @@ class MainViewModel(
         fun provideFactory(context: Context): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val appContext = context.applicationContext
-                val extractor = MediaRetrieverExtractor(appContext)
+                val extractor = MediaCodecVideoExtractor(appContext)
                 val detector = MlKitFaceDetectorImpl()
-                val embedder = MobileFaceNetEmbedder(appContext)
+                val embedder = FaceNetEmbedder(appContext)
                 MainViewModel(extractor, detector, embedder)
             }
         }
