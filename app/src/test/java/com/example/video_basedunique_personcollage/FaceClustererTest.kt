@@ -123,4 +123,45 @@ class FaceClustererTest {
         assertEquals(1, clusters.size)
         assertEquals(3, clusters[0].appearanceCount)
     }
+
+    @Test
+    fun testFaceClustering_sameFrameFaces_neverClusteredTogether() {
+        val dummyBitmap = Mockito.mock(Bitmap::class.java)
+        val dummyRect = Mockito.mock(Rect::class.java)
+
+        // Two different people appearing at the exact same timestamp (0ms)
+        // Even if embeddings are identical, they must NEVER be placed in the same cluster
+        val face1 = FaceAnalysisResult(
+            croppedBitmap = dummyBitmap,
+            trackingId = 1,
+            originalBoundingBox = dummyRect,
+            smileProbability = null,
+            leftEyeOpenProbability = null,
+            rightEyeOpenProbability = null,
+            headEulerAngleX = 0f,
+            headEulerAngleY = 0f,
+            headEulerAngleZ = 0f,
+            timestampMs = 0L,
+            embedding = floatArrayOf(1f, 0f, 0f)
+        )
+        val face2 = FaceAnalysisResult(
+            croppedBitmap = dummyBitmap,
+            trackingId = 2,
+            originalBoundingBox = dummyRect,
+            smileProbability = null,
+            leftEyeOpenProbability = null,
+            rightEyeOpenProbability = null,
+            headEulerAngleX = 0f,
+            headEulerAngleY = 0f,
+            headEulerAngleZ = 0f,
+            timestampMs = 0L,
+            embedding = floatArrayOf(0.99f, 0.01f, 0f) // Highly similar
+        )
+
+        val clusterer = FaceClusterer(similarityThreshold = 0.5f)
+        val clusters = clusterer.cluster(listOf(face1, face2))
+
+        // Must produce 2 separate clusters despite high similarity because timestamp is identical
+        assertEquals(2, clusters.size)
+    }
 }
