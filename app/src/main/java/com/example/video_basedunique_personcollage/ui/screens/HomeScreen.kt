@@ -12,9 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +31,8 @@ fun HomeScreen(viewModel: MainViewModel) {
     val clusters by viewModel.clusters.collectAsState()
     val faces by viewModel.extractedFaces.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+
+    var showCollageDialog by remember { mutableStateOf(false) }
 
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -182,6 +182,23 @@ fun HomeScreen(viewModel: MainViewModel) {
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Create Collage Action Button
+            Button(
+                onClick = { showCollageDialog = true },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text(
+                    text = "Create Unique Person Collage ✨",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
         } else if (statusMessage.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -216,6 +233,13 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
         }
     }
+
+    if (showCollageDialog) {
+        CollagePreviewDialog(
+            viewModel = viewModel,
+            onDismiss = { showCollageDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -240,7 +264,7 @@ fun PersonClusterCard(cluster: PersonCluster) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Representative Face Avatar
                     val repBitmap = cluster.representativeBitmap
-                    if (repBitmap != null) {
+                    if (repBitmap != null && !repBitmap.isRecycled) {
                         Image(
                             bitmap = repBitmap.asImageBitmap(),
                             contentDescription = "Person ${cluster.id}",
@@ -297,29 +321,31 @@ fun PersonClusterCard(cluster: PersonCluster) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(cluster.faceResults) { face ->
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
-                    ) {
-                        Image(
-                            bitmap = face.croppedBitmap.asImageBitmap(),
-                            contentDescription = "Face at ${face.timestampMs}ms",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                        // Timestamp badge
-                        val timeSeconds = face.timestampMs / 1000f
-                        Text(
-                            text = String.format("%.1fs", timeSeconds),
-                            color = Color.White,
-                            fontSize = 10.sp,
+                    if (!face.croppedBitmap.isRecycled) {
+                        Box(
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .padding(horizontal = 3.dp, vertical = 1.dp)
-                        )
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
+                        ) {
+                            Image(
+                                bitmap = face.croppedBitmap.asImageBitmap(),
+                                contentDescription = "Face at ${face.timestampMs}ms",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            // Timestamp badge
+                            val timeSeconds = face.timestampMs / 1000f
+                            Text(
+                                text = String.format("%.1fs", timeSeconds),
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .padding(horizontal = 3.dp, vertical = 1.dp)
+                            )
+                        }
                     }
                 }
             }
