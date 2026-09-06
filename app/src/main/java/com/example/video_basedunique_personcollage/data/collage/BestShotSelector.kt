@@ -40,21 +40,28 @@ object BestShotSelector {
         val smileProb = (face.smileProbability ?: 0f).coerceIn(0f, 1f)
         val smileComponent = smileProb * 25.0
 
-        // 3. Eye openness component (both eyes open, no blinking) -> 0..25 points
-        val leftEye = (face.leftEyeOpenProbability ?: 0.5f).coerceIn(0f, 1f)
-        val rightEye = (face.rightEyeOpenProbability ?: 0.5f).coerceIn(0f, 1f)
+        // 3. Eye openness component (both eyes open, no blinking) -> 0..30 points
+        val leftEye = (face.leftEyeOpenProbability ?: 0.6f).coerceIn(0f, 1f)
+        val rightEye = (face.rightEyeOpenProbability ?: 0.6f).coerceIn(0f, 1f)
         val bothEyesOpen = min(leftEye, rightEye)
-        val eyeComponent = bothEyesOpen * 25.0
+        val eyeComponent = bothEyesOpen * 30.0
 
-        // 4. Frontal pose bonus / penalty
-        // Total head rotation angle: pitch (X) + yaw (Y) + roll (Z)
-        val totalRotation = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
-        val posePenalty = if (totalRotation > 15f) {
-            (totalRotation - 15f) * 1.5
+        // Blink / closed eyes heavy penalty (prevents blinks being chosen as hero shots)
+        val blinkPenalty = if (bothEyesOpen < 0.45f) {
+            (0.45f - bothEyesOpen) * 80.0
         } else {
             0.0
         }
 
-        return sharpnessComponent + smileComponent + eyeComponent - posePenalty
+        // 4. Frontal pose bonus / penalty
+        // Total head rotation angle: pitch (X) + yaw (Y) + roll (Z)
+        val totalRotation = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
+        val posePenalty = if (totalRotation > 10f) {
+            (totalRotation - 10f) * 2.0
+        } else {
+            0.0
+        }
+
+        return sharpnessComponent + smileComponent + eyeComponent - blinkPenalty - posePenalty
     }
 }
