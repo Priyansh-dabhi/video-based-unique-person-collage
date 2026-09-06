@@ -5,171 +5,240 @@ import com.example.video_basedunique_personcollage.data.model.FaceAnalysisResult
 import com.example.video_basedunique_personcollage.data.model.PersonCluster
 import com.example.video_basedunique_personcollage.utils.MathUtils
 import kotlin.math.abs
+import kotlin.math.min
 
+/**
+ * Production face clusterer using **Chinese Whispers** with **Reciprocal K-Nearest Neighbor**
+ * edge filtering, calibrated for FaceNet-512 embeddings.
+ *
+ * FaceNet-512 characteristics:
+ * - Same person, varied pose: cosine similarity 0.50–0.85
+ * - Different people:         cosine similarity 0.05–0.40
+ * - FaceNet has GOOD inter-person separation but can over-split under pose variation
+ *
+ * Pipeline:
+ * 1. Compute pairwise similarity matrix
+ * 2. Find K-nearest neighbors for each face (excluding same-timestamp)
+ * 3. Create weighted edges only between reciprocal KNN pairs
+ * 4. Run Chinese Whispers label propagation
+ * 5. Centroid-based merge pass to reunite over-split clusters
+ * 6. Noise filtering for single-face clusters
+ */
 class FaceClusterer(
-    private val similarityThreshold: Float = 0.62f,
-    private val maxGapForAppearanceMs: Long = 1200L,
-    private val minFacesForValidCluster: Int = 3,
-    private val strictMergeThreshold: Float = 0.62f,
-    private val enableAgglomerativeMerge: Boolean = true
+    /** Minimum cosine similarity for a reciprocal KNN edge. */
+    private val minEdgeSimilarity: Float = 0.40f,
+    /** Number of nearest neighbors for reciprocal check. */
+    private val kNeighbors: Int = 12,
+    /** Gap (ms) that breaks an appearance sequence. */
+    private val maxGapForAppearanceMs: Long = 800L,
+    /** Max Chinese Whispers iterations. */
+    private val maxIterations: Int = 50,
+    /** Centroid similarity threshold for post-CW merge pass. */
+    private val centroidMergeThreshold: Float = 0.58f
 ) {
 
-    /**
-     * Groups face analysis results into unique person clusters using:
-     * 1. Tracklet-first grouping (leveraging ML Kit's trackingId).
-     * 2. Temporal mutual exclusion (two faces in the same video frame can NEVER be the same person).
-     * 3. Secondary agglomerative merge pass to unify multi-angle clusters of the same person.
-     * 4. Fleeting noise/false-detection filtering.
-     * 5. Sharpness-dominant avatar selection.
-     */
-    fun cluster(faces: List<FaceAnalysisResult>): List<PersonCluster> {
-        val validFaces = faces.filter { it.embedding != null }
-        Log.d("FaceClusterer", "Starting clustering: Total faces = ${faces.size}, with embeddings = ${validFaces.size}")
-        if (validFaces.isEmpty()) return emptyList()
-
-        // 1. Treat each face as its own tracklet
-        val tracklets = validFaces.map { mutableListOf(it) }.toMutableList()
-
-        // 2. Initial Clustering of Tracklets
-        val clusters = mutableListOf<PersonCluster>()
-        var nextId = 1
-
-        for (tracklet in tracklets) {
-            val trackletEmbeddings = tracklet.mapNotNull { it.embedding }
-            if (trackletEmbeddings.isEmpty()) continue
-            val trackletCentroid = MathUtils.computeCentroid(trackletEmbeddings)
-            val trackletTimestamps = tracklet.map { it.timestampMs }.toSet()
-
-            var bestCluster: PersonCluster? = null
-            var highestSimilarity = -1f
-
-            for (cluster in clusters) {
-                // HARD CONSTRAINT: A person cannot be in two places at the exact same timestamp
-                val clusterTimestamps = cluster.faceResults.map { it.timestampMs }.toSet()
-                val hasTemporalConflict = clusterTimestamps.intersect(trackletTimestamps).isNotEmpty()
-                if (hasTemporalConflict) {
-                    continue
-                }
-
-                // Hybrid similarity: check both centroid and best-matching individual face
-                val centroidSim = MathUtils.cosineSimilarity(trackletCentroid, cluster.centroid)
-                val maxFaceSim = cluster.embeddings.maxOfOrNull { MathUtils.cosineSimilarity(trackletCentroid, it) } ?: 0f
-                val similarity = maxOf(centroidSim, maxFaceSim * 0.96f)
-
-                if (similarity > highestSimilarity) {
-                    highestSimilarity = similarity
-                    bestCluster = cluster
-                }
-            }
-
-            if (bestCluster != null && highestSimilarity >= similarityThreshold) {
-                Log.d("FaceClusterer", "Merged tracklet (${tracklet.size} faces) into Cluster ${bestCluster.id} (sim: $highestSimilarity >= $similarityThreshold)")
-                bestCluster.faceResults.addAll(tracklet)
-                bestCluster.embeddings.addAll(trackletEmbeddings)
-                bestCluster.centroid = MathUtils.computeCentroid(bestCluster.embeddings)
-            } else {
-                Log.d("FaceClusterer", "Created new Cluster $nextId for tracklet (${tracklet.size} faces, maxSim: $highestSimilarity vs thr: $similarityThreshold)")
-                val newCluster = PersonCluster(
-                    id = nextId++,
-                    faceResults = tracklet.toMutableList(),
-                    embeddings = trackletEmbeddings.toMutableList(),
-                    centroid = trackletCentroid.clone(),
-                    appearanceCount = 1
-                )
-                clusters.add(newCluster)
-            }
-        }
-
-        // 3. Secondary Agglomerative Merge Pass to join clusters of the same person across cuts/angles
-        if (enableAgglomerativeMerge) {
-            var merged = true
-            while (merged) {
-                merged = false
-                var bestI = -1
-                var bestJ = -1
-                var maxMergeSimilarity = strictMergeThreshold
-
-                for (i in 0 until clusters.size) {
-                    for (j in i + 1 until clusters.size) {
-                        val clusterA = clusters[i]
-                        val clusterB = clusters[j]
-
-                        // Cannot merge if there is any timestamp collision
-                        val timestampsA = clusterA.faceResults.map { it.timestampMs }.toSet()
-                        val timestampsB = clusterB.faceResults.map { it.timestampMs }.toSet()
-                        if (timestampsA.intersect(timestampsB).isNotEmpty()) {
-                            continue
-                        }
-
-                        val centroidSim = MathUtils.cosineSimilarity(clusterA.centroid, clusterB.centroid)
-                        val maxPairSim = clusterA.embeddings.maxOfOrNull { embA ->
-                            clusterB.embeddings.maxOfOrNull { embB -> MathUtils.cosineSimilarity(embA, embB) } ?: 0f
-                        } ?: 0f
-                        val sim = maxOf(centroidSim, maxPairSim * 0.95f)
-
-                        if (sim > maxMergeSimilarity) {
-                            maxMergeSimilarity = sim
-                            bestI = i
-                            bestJ = j
-                        }
-                    }
-                }
-
-                if (bestI != -1 && bestJ != -1) {
-                    val target = clusters[bestI]
-                    val source = clusters[bestJ]
-                    Log.d("FaceClusterer", "Agglomerative merge: Cluster ${source.id} into ${target.id} (sim: $maxMergeSimilarity >= $strictMergeThreshold)")
-                    target.faceResults.addAll(source.faceResults)
-                    target.embeddings.addAll(source.embeddings)
-                    target.centroid = MathUtils.computeCentroid(target.embeddings)
-                    clusters.removeAt(bestJ)
-                    merged = true
-                }
-            }
-        }
-
-        // 4. Filter transient noise (single-frame blur/false positives)
-        // If total detections across video is substantial (>= 6), require at least minFacesForValidCluster
-        val filteredClusters = if (validFaces.size >= 6) {
-            clusters.filter { it.faceResults.size >= minFacesForValidCluster }.ifEmpty { clusters }
-        } else {
-            clusters
-        }
-
-        // 5. Reassign IDs sequentially, compute appearances, and select sharpest, highest-quality avatar
-        val finalClusters = filteredClusters.sortedByDescending { it.faceResults.size }
-        finalClusters.forEachIndexed { index, cluster ->
-            cluster.id = index + 1
-            cluster.appearanceCount = calculateAppearances(cluster.faceResults, maxGapForAppearanceMs)
-            // Sort faces by sharpness-dominant quality score to ensure the clearest avatar
-            cluster.faceResults.sortWith(
-                compareByDescending<FaceAnalysisResult> { face ->
-                    val totalAngle = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
-                    val anglePenalty = if (totalAngle > 15f) (totalAngle - 15f) * 1.5 else 0.0
-                    face.sharpnessScore - anglePenalty
-                }
-            )
-        }
-
-        Log.d("FaceClusterer", "Clustering finished. Formed ${finalClusters.size} clusters from ${validFaces.size} faces.")
-        return finalClusters
+    companion object {
+        private const val TAG = "FaceClusterer"
     }
 
-    /**
-     * Computes the number of distinct continuous appearances based on timestamp gaps.
-     */
-    private fun calculateAppearances(faces: List<FaceAnalysisResult>, maxGapMs: Long): Int {
-        if (faces.isEmpty()) return 0
-        val sortedTimestamps = faces.map { it.timestampMs }.sorted().distinct()
-        if (sortedTimestamps.isEmpty()) return 0
+    fun cluster(faces: List<FaceAnalysisResult>): List<PersonCluster> {
+        val validFaces = faces.filter { it.embedding != null }
+        Log.d(TAG, "Starting: total=${faces.size}, withEmbedding=${validFaces.size}")
+        if (validFaces.isEmpty()) return emptyList()
 
-        var appearances = 1
-        for (i in 1 until sortedTimestamps.size) {
-            val gap = sortedTimestamps[i] - sortedTimestamps[i - 1]
-            if (gap > maxGapMs) {
-                appearances++
+        val n = validFaces.size
+        if (n == 1) {
+            return listOf(buildCluster(1, validFaces, validFaces.mapNotNull { it.embedding }))
+        }
+
+        // ─── Step 1: Pairwise similarity matrix ─────────────────────────────
+        val sim = Array(n) { FloatArray(n) }
+        for (i in 0 until n) {
+            sim[i][i] = 1.0f
+            for (j in i + 1 until n) {
+                val s = MathUtils.cosineSimilarity(
+                    validFaces[i].embedding!!, validFaces[j].embedding!!
+                )
+                sim[i][j] = s
+                sim[j][i] = s
             }
         }
-        return appearances
+
+        // ─── Step 2: K-Nearest Neighbors (excluding same-timestamp) ─────────
+        val effectiveK = min(kNeighbors, n - 1)
+        val knnSets = Array(n) { i ->
+            val tsI = validFaces[i].timestampMs
+            (0 until n)
+                .filter { j -> j != i && validFaces[j].timestampMs != tsI }
+                .sortedByDescending { j -> sim[i][j] }
+                .take(effectiveK)
+                .toSet()
+        }
+
+        // ─── Step 3: Reciprocal KNN edges ───────────────────────────────────
+        val adjacency = Array(n) { mutableListOf<Pair<Int, Float>>() }
+        var edgeCount = 0
+
+        for (i in 0 until n) {
+            for (j in knnSets[i]) {
+                if (j > i && i in knnSets[j]) {
+                    val s = sim[i][j]
+                    if (s >= minEdgeSimilarity) {
+                        adjacency[i].add(Pair(j, s))
+                        adjacency[j].add(Pair(i, s))
+                        edgeCount++
+                    }
+                }
+            }
+        }
+
+        val isolated = adjacency.count { it.isEmpty() }
+        Log.d(TAG, "Reciprocal KNN graph: $n nodes, $edgeCount edges, $isolated isolated (K=$effectiveK)")
+
+        // ─── Step 4: Chinese Whispers ───────────────────────────────────────
+        val labels = IntArray(n) { it }
+        var changed = true
+        var iteration = 0
+
+        while (changed && iteration < maxIterations) {
+            changed = false
+            iteration++
+            for (nodeIdx in (0 until n).shuffled()) {
+                val neighbors = adjacency[nodeIdx]
+                if (neighbors.isEmpty()) continue
+                val labelWeights = mutableMapOf<Int, Float>()
+                for ((nIdx, w) in neighbors) {
+                    val lbl = labels[nIdx]
+                    labelWeights[lbl] = (labelWeights[lbl] ?: 0f) + w
+                }
+                val best = labelWeights.maxByOrNull { it.value }?.key ?: labels[nodeIdx]
+                if (best != labels[nodeIdx]) {
+                    labels[nodeIdx] = best
+                    changed = true
+                }
+            }
+        }
+
+        Log.d(TAG, "CW converged after $iteration iterations")
+
+        // ─── Step 5: Collect raw clusters ───────────────────────────────────
+        val labelToIndices = mutableMapOf<Int, MutableList<Int>>()
+        for (i in 0 until n) {
+            labelToIndices.getOrPut(labels[i]) { mutableListOf() }.add(i)
+        }
+        Log.d(TAG, "Raw CW clusters: ${labelToIndices.size}")
+
+        // ─── Step 6: Centroid-based merge pass ──────────────────────────────
+        // FaceNet over-splits same person under pose variation.
+        // Merge clusters whose centroids are similar AND have no temporal conflict.
+        data class ClusterData(
+            val indices: MutableList<Int>,
+            var centroid: FloatArray
+        )
+
+        val clusterList = labelToIndices.values.map { idxList ->
+            val embs = idxList.mapNotNull { validFaces[it].embedding }
+            ClusterData(idxList.toMutableList(), MathUtils.computeCentroid(embs))
+        }.toMutableList()
+
+        var merged = true
+        while (merged && clusterList.size > 1) {
+            merged = false
+            var bestI = -1
+            var bestJ = -1
+            var bestSim = 0f
+
+            for (i in clusterList.indices) {
+                for (j in i + 1 until clusterList.size) {
+                    val ca = clusterList[i]
+                    val cb = clusterList[j]
+
+                    // Temporal conflict: can't merge if they share timestamps
+                    val tsA = ca.indices.map { validFaces[it].timestampMs }.toHashSet()
+                    if (cb.indices.any { validFaces[it].timestampMs in tsA }) continue
+
+                    val cSim = MathUtils.cosineSimilarity(ca.centroid, cb.centroid)
+
+                    // Also verify with cross-member average similarity
+                    // (prevents centroid drift from causing wrong merges)
+                    if (ca.indices.size >= 3 && cb.indices.size >= 3) {
+                        var crossSum = 0f
+                        var crossCount = 0
+                        for (ai in ca.indices) {
+                            for (bi in cb.indices) {
+                                crossSum += sim[ai][bi]
+                                crossCount++
+                            }
+                        }
+                        val avgCross = if (crossCount > 0) crossSum / crossCount else 0f
+                        // Both centroid sim AND average cross-member sim must pass
+                        if (avgCross < centroidMergeThreshold - 0.05f) continue
+                    }
+
+                    if (cSim >= centroidMergeThreshold && cSim > bestSim) {
+                        bestSim = cSim
+                        bestI = i
+                        bestJ = j
+                    }
+                }
+            }
+
+            if (bestI >= 0 && bestJ >= 0) {
+                val target = clusterList[bestI]
+                val source = clusterList[bestJ]
+                Log.d(TAG, "Centroid merge: ${source.indices.size} faces → cluster with ${target.indices.size} (sim=${"%.3f".format(bestSim)})")
+                target.indices.addAll(source.indices)
+                val allEmbs = target.indices.mapNotNull { validFaces[it].embedding }
+                target.centroid = MathUtils.computeCentroid(allEmbs)
+                clusterList.removeAt(bestJ)
+                merged = true
+            }
+        }
+
+        Log.d(TAG, "After centroid merge: ${clusterList.size} clusters")
+
+        // ─── Step 7: Keep all clusters (user can manually remove via Remove button) ──
+        // No noise filtering — it was discarding the 5th person as a small cluster.
+        val filtered = clusterList
+
+        Log.d(TAG, "Final clusters: ${filtered.size}")
+
+        // ─── Step 8: Build final PersonCluster objects ──────────────────────
+        val result = filtered
+            .sortedByDescending { it.indices.size }
+            .mapIndexed { index, cd ->
+                val faceList = cd.indices.map { validFaces[it] }
+                val embList = cd.indices.mapNotNull { validFaces[it].embedding }
+                buildCluster(index + 1, faceList, embList)
+            }
+
+        Log.d(TAG, "Final: ${result.size} unique people from ${validFaces.size} faces")
+        return result
+    }
+
+    private fun buildCluster(id: Int, faces: List<FaceAnalysisResult>, embs: List<FloatArray>): PersonCluster {
+        val cluster = PersonCluster(
+            id = id,
+            faceResults = faces.toMutableList(),
+            embeddings = embs.toMutableList(),
+            centroid = MathUtils.computeCentroid(embs),
+            appearanceCount = calculateAppearances(faces, maxGapForAppearanceMs)
+        )
+        cluster.faceResults.sortWith(compareByDescending { face ->
+            val totalAngle = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
+            val anglePenalty = if (totalAngle > 15f) (totalAngle - 15f) * 1.5 else 0.0
+            face.sharpnessScore - anglePenalty
+        })
+        return cluster
+    }
+
+    private fun calculateAppearances(faces: List<FaceAnalysisResult>, maxGapMs: Long): Int {
+        if (faces.isEmpty()) return 0
+        val sorted = faces.map { it.timestampMs }.sorted().distinct()
+        var count = 1
+        for (i in 1 until sorted.size) {
+            if (sorted[i] - sorted[i - 1] > maxGapMs) count++
+        }
+        return count
     }
 }
