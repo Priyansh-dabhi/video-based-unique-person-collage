@@ -47,6 +47,7 @@ class FaceClustererTest {
             headEulerAngleY = 0f,
             headEulerAngleZ = 0f,
             timestampMs = 0L,
+            sharpnessScore = 50.0,
             embedding = floatArrayOf(0.9f, 0.1f, 0f)
         )
         val faceA2 = FaceAnalysisResult(
@@ -60,6 +61,7 @@ class FaceClustererTest {
             headEulerAngleY = 0f,
             headEulerAngleZ = 0f,
             timestampMs = 333L,
+            sharpnessScore = 50.0,
             embedding = floatArrayOf(0.88f, 0.12f, 0f)
         )
 
@@ -75,6 +77,7 @@ class FaceClustererTest {
             headEulerAngleY = 0f,
             headEulerAngleZ = 0f,
             timestampMs = 666L,
+            sharpnessScore = 50.0,
             embedding = floatArrayOf(0.0f, 0.1f, 0.95f)
         )
 
@@ -142,6 +145,7 @@ class FaceClustererTest {
             headEulerAngleY = 0f,
             headEulerAngleZ = 0f,
             timestampMs = 0L,
+            sharpnessScore = 50.0,
             embedding = floatArrayOf(1f, 0f, 0f)
         )
         val face2 = FaceAnalysisResult(
@@ -155,6 +159,7 @@ class FaceClustererTest {
             headEulerAngleY = 0f,
             headEulerAngleZ = 0f,
             timestampMs = 0L,
+            sharpnessScore = 50.0,
             embedding = floatArrayOf(0.99f, 0.01f, 0f) // Highly similar
         )
 
