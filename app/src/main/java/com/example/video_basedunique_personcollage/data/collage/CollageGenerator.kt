@@ -94,27 +94,14 @@ object CollageGenerator {
             textSize = 24f
             typeface = Typeface.DEFAULT
         }
-        val totalAppearances = items.sumOf { it.appearances }
-        canvas.drawText("$count Unique People • $totalAppearances Total Appearances", padding, 115f, subPaint)
+        canvas.drawText("$count Unique Personalities • Curated Collection", padding, 115f, subPaint)
 
-        // Draw each face card
+        // Draw each face card (clean, edge-to-edge photo without text overlays)
         val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#2C2D35")
+            color = Color.parseColor("#2A3342")
             style = Paint.Style.STROKE
             strokeWidth = 3f
-        }
-        val overlayPaint = Paint().apply {
-            color = Color.parseColor("#CC000000")
-        }
-        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 26f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E0E0E0")
-            textSize = 20f
         }
 
         val cornerRadius = 24f
@@ -135,23 +122,8 @@ object CollageGenerator {
             val clipPath = Path().apply { addRoundRect(rect, cornerRadius, cornerRadius, Path.Direction.CW) }
             canvas.clipPath(clipPath)
 
-            // Draw cropped photo centered
+            // Draw cropped photo centered - completely clean
             drawBitmapFitCenter(canvas, item.bitmap, rect, cardPaint)
-
-            // Gradient overlay at bottom of card
-            val overlayHeight = 70f
-            val gradPaint = Paint().apply {
-                shader = LinearGradient(
-                    0f, bottom - overlayHeight, 0f, bottom,
-                    Color.TRANSPARENT, Color.parseColor("#D9000000"),
-                    Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawRect(left, bottom - overlayHeight, right, bottom, gradPaint)
-
-            // Person label & appearance count
-            canvas.drawText("Person #${item.id}", left + 14f, bottom - 34f, labelPaint)
-            canvas.drawText("${item.appearances} appearances", left + 14f, bottom - 12f, badgePaint)
 
             canvas.restore()
 
@@ -220,18 +192,7 @@ object CollageGenerator {
             setShadowLayer(14f, 0f, 8f, Color.parseColor("#50000000"))
         }
         val photoMargin = 16f
-        val photoBottomMargin = cardHeight * 0.22f
-        val polaroidText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#2A2C30")
-            textSize = 24f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-        }
-        val polaroidSub = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#7A7E85")
-            textSize = 18f
-            textAlign = Paint.Align.CENTER
-        }
+        val photoBottomMargin = cardHeight * 0.18f
         val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
 
         // Slight organic rotations for Polaroid realism
@@ -254,9 +215,9 @@ object CollageGenerator {
 
             // Draw Polaroid White Card with Soft Shadow
             val cardRect = RectF(left, top, left + cardWidth, top + cardHeight)
-            canvas.drawRoundRect(cardRect, 8f, 8f, polaroidBg)
+            canvas.drawRoundRect(cardRect, 10f, 10f, polaroidBg)
 
-            // Inner Photo Rect (Square)
+            // Inner Photo Rect (clean white polaroid border, no text)
             val photoRect = RectF(
                 left + photoMargin,
                 top + photoMargin,
@@ -265,11 +226,6 @@ object CollageGenerator {
             )
             drawBitmapFitCenter(canvas, item.bitmap, photoRect, cardPaint)
 
-            // Caption text
-            val textY = top + cardHeight - (photoBottomMargin * 0.45f)
-            canvas.drawText("Person #${item.id}", centerX, textY, polaroidText)
-            canvas.drawText("${item.appearances} appearances", centerX, textY + 24f, polaroidSub)
-
             canvas.restore()
         }
 
@@ -277,7 +233,7 @@ object CollageGenerator {
     }
 
     // -------------------------------------------------------------------------
-    // STYLE 3: STORY POSTER (9:16 vertical)
+    // STYLE 3: STORY POSTER (9:16 vertical - Cinematic Ensemble Edition)
     // -------------------------------------------------------------------------
     private fun renderStoryPoster(items: List<CollageItem>): Bitmap {
         val canvasWidth = 1080
@@ -286,119 +242,226 @@ object CollageGenerator {
         val output = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
 
-        // Gradient poster background: Deep Indigo to Obsidian
+        // Gradient poster background: Deep Obsidian to Midnight Navy
         val bgPaint = Paint().apply {
             shader = LinearGradient(
-                0f, 0f, canvasWidth.toFloat(), canvasHeight.toFloat(),
-                Color.parseColor("#0F172A"), Color.parseColor("#020617"),
+                0f, 0f, 0f, canvasHeight.toFloat(),
+                intArrayOf(
+                    Color.parseColor("#040812"),
+                    Color.parseColor("#091326"),
+                    Color.parseColor("#030710")
+                ),
+                floatArrayOf(0f, 0.55f, 1f),
                 Shader.TileMode.CLAMP
             )
         }
         canvas.drawRect(0f, 0f, canvasWidth.toFloat(), canvasHeight.toFloat(), bgPaint)
 
-        // Header Category Pill
-        val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#1E293B")
+        // Outer Double Editorial Framing Border
+        val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#253549")
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
         }
-        val pillText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#38BDF8")
-            textSize = 22f
+        canvas.drawRect(36f, 36f, canvasWidth - 36f, canvasHeight - 36f, framePaint)
+
+        val innerGoldFrame = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#4DFFB95F")
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+        }
+        canvas.drawRect(44f, 44f, canvasWidth - 44f, canvasHeight - 44f, innerGoldFrame)
+
+        // Header Kicker: Spaced gold editorial tag
+        val kickerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FFB95F")
+            textSize = 20f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.25f
             textAlign = Paint.Align.CENTER
         }
-        val pillRect = RectF(canvasWidth / 2f - 140f, 100f, canvasWidth / 2f + 140f, 150f)
-        canvas.drawRoundRect(pillRect, 25f, 25f, pillPaint)
-        canvas.drawText("AI VIDEO CAST", canvasWidth / 2f, 134f, pillText)
+        canvas.drawText("✦  A  C I N E M A T I C  A I  S T U D Y  ✦", canvasWidth / 2f, 120f, kickerPaint)
 
-        // Main Poster Title
+        // Main Poster Title: "THE ENSEMBLE"
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 58f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = Color.parseColor("#F8FAFC")
+            textSize = 68f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            letterSpacing = 0.08f
             textAlign = Paint.Align.CENTER
+            setShadowLayer(20f, 0f, 6f, Color.parseColor("#66000000"))
         }
-        canvas.drawText("Unique Faces", canvasWidth / 2f, 220f, titlePaint)
+        canvas.drawText("THE ENSEMBLE", canvasWidth / 2f, 205f, titlePaint)
 
-        val totalAppearances = items.sumOf { it.appearances }
+        // Subtitle: Cast summary
         val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#94A3B8")
-            textSize = 26f
+            textSize = 24f
+            typeface = Typeface.DEFAULT
             textAlign = Paint.Align.CENTER
+            letterSpacing = 0.04f
         }
-        canvas.drawText("${items.size} People Identified • $totalAppearances Appearances", canvasWidth / 2f, 265f, subPaint)
+        canvas.drawText("Featuring ${items.size} Unique Voices Captured from Motion", canvasWidth / 2f, 255f, subPaint)
 
-        // Grid of photos
+        // Thin golden accent divider under title
+        val goldLine = Paint().apply {
+            shader = LinearGradient(
+                canvasWidth / 2f - 200f, 0f, canvasWidth / 2f + 200f, 0f,
+                Color.TRANSPARENT, Color.parseColor("#B3FFB95F"),
+                Shader.TileMode.MIRROR
+            )
+            strokeWidth = 2f
+        }
+        canvas.drawLine(canvasWidth / 2f - 180f, 290f, canvasWidth / 2f + 180f, 290f, goldLine)
+
+        // ── Editorial Photo Gallery ───────────────────────────────────────
         val count = items.size
-        val cols = if (count <= 4) 2 else 3
-        val rows = ceil(count.toFloat() / cols).toInt()
-
-        val padding = 50f
-        val spacing = 24f
-        val availableWidth = canvasWidth - (padding * 2) - (spacing * (cols - 1))
-        val cellWidth = availableWidth / cols
-        val cellHeight = cellWidth * 1.15f
-
+        val paddingX = 64f
         val gridStartY = 330f
+        val availableWidth = canvasWidth - (paddingX * 2)
         val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#334155")
+        val photoBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#38485E")
             style = Paint.Style.STROKE
             strokeWidth = 3f
         }
-        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 26f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val countPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#38BDF8")
-            textSize = 20f
-            typeface = Typeface.DEFAULT
+        val photoGoldAccent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#99FFB95F")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f
         }
 
-        for (i in items.indices) {
-            val item = items[i]
-            val r = i / cols
-            val c = i % cols
+        if (count == 5) {
+            // 2 on top (prominent), 3 on bottom (symmetrical)
+            val spacing = 24f
+            val topRowHeight = 520f
+            val topCardWidth = (availableWidth - spacing) / 2f
 
-            val left = padding + c * (cellWidth + spacing)
-            val top = gridStartY + r * (cellHeight + spacing)
-            val right = left + cellWidth
-            val bottom = top + cellHeight
-            val rect = RectF(left, top, right, bottom)
+            // Top 2 cards
+            for (i in 0 until 2) {
+                val left = paddingX + i * (topCardWidth + spacing)
+                val top = gridStartY
+                val right = left + topCardWidth
+                val bottom = top + topRowHeight
+                val rect = RectF(left, top, right, bottom)
 
-            canvas.save()
-            val clipPath = Path().apply { addRoundRect(rect, 28f, 28f, Path.Direction.CW) }
-            canvas.clipPath(clipPath)
+                canvas.save()
+                val clipPath = Path().apply { addRoundRect(rect, 20f, 20f, Path.Direction.CW) }
+                canvas.clipPath(clipPath)
+                drawBitmapFitCenter(canvas, items[i].bitmap, rect, cardPaint)
+                canvas.restore()
 
-            // Draw Face
-            drawBitmapFitCenter(canvas, item.bitmap, rect, cardPaint)
-
-            // Bottom gradient
-            val gradPaint = Paint().apply {
-                shader = LinearGradient(
-                    0f, bottom - 75f, 0f, bottom,
-                    Color.TRANSPARENT, Color.parseColor("#E6020617"),
-                    Shader.TileMode.CLAMP
-                )
+                canvas.drawRoundRect(rect, 20f, 20f, photoBorder)
+                canvas.drawRoundRect(RectF(left + 3f, top + 3f, right - 3f, bottom - 3f), 17f, 17f, photoGoldAccent)
             }
-            canvas.drawRect(left, bottom - 75f, right, bottom, gradPaint)
 
-            // Text
-            canvas.drawText("Person #${item.id}", left + 16f, bottom - 34f, namePaint)
-            canvas.drawText("${item.appearances} scenes", left + 16f, bottom - 12f, countPaint)
+            // Bottom 3 cards
+            val bottomStartY = gridStartY + topRowHeight + spacing
+            val bottomRowHeight = 440f
+            val bottomCardWidth = (availableWidth - (spacing * 2)) / 3f
 
-            canvas.restore()
-            canvas.drawRoundRect(rect, 28f, 28f, borderPaint)
+            for (i in 2 until 5) {
+                val col = i - 2
+                val left = paddingX + col * (bottomCardWidth + spacing)
+                val top = bottomStartY
+                val right = left + bottomCardWidth
+                val bottom = top + bottomRowHeight
+                val rect = RectF(left, top, right, bottom)
+
+                canvas.save()
+                val clipPath = Path().apply { addRoundRect(rect, 18f, 18f, Path.Direction.CW) }
+                canvas.clipPath(clipPath)
+                drawBitmapFitCenter(canvas, items[i].bitmap, rect, cardPaint)
+                canvas.restore()
+
+                canvas.drawRoundRect(rect, 18f, 18f, photoBorder)
+                canvas.drawRoundRect(RectF(left + 3f, top + 3f, right - 3f, bottom - 3f), 15f, 15f, photoGoldAccent)
+            }
+        } else {
+            // General grid: 2 cols for <= 4, 3 cols for > 5
+            val cols = if (count <= 4) 2 else 3
+            val rows = ceil(count.toFloat() / cols).toInt()
+            val spacing = 24f
+            val cellWidth = (availableWidth - (spacing * (cols - 1))) / cols
+            val cellHeight = min(cellWidth * 1.25f, (1100f / rows))
+
+            for (i in items.indices) {
+                val r = i / cols
+                val c = i % cols
+
+                val left = paddingX + c * (cellWidth + spacing)
+                val top = gridStartY + r * (cellHeight + spacing)
+                val right = left + cellWidth
+                val bottom = top + cellHeight
+                val rect = RectF(left, top, right, bottom)
+
+                canvas.save()
+                val clipPath = Path().apply { addRoundRect(rect, 18f, 18f, Path.Direction.CW) }
+                canvas.clipPath(clipPath)
+                drawBitmapFitCenter(canvas, items[i].bitmap, rect, cardPaint)
+                canvas.restore()
+
+                canvas.drawRoundRect(rect, 18f, 18f, photoBorder)
+                canvas.drawRoundRect(RectF(left + 3f, top + 3f, right - 3f, bottom - 3f), 15f, 15f, photoGoldAccent)
+            }
         }
 
-        // Footer Branding
-        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#64748B")
-            textSize = 20f
+        // ── Authentic Cinematic Billing Block ──────────────────────────────
+        val creditsStartY = canvasHeight - 270f
+
+        val creditLine = Paint().apply {
+            color = Color.parseColor("#1E293B")
+            strokeWidth = 2f
+        }
+        canvas.drawLine(70f, creditsStartY, canvasWidth - 70f, creditsStartY, creditLine)
+
+        val billingHeader = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#C8C4D9")
+            textSize = 21f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.12f
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("Generated with Unique Person Collage", canvasWidth / 2f, canvasHeight - 60f, footerPaint)
+        canvas.drawText(
+            "FACECOLLAGE AI STUDIO PRESENTS AN ON-DEVICE PRODUCTION",
+            canvasWidth / 2f,
+            creditsStartY + 45f,
+            billingHeader
+        )
+
+        val billingBody = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#828A99")
+            textSize = 17f
+            typeface = Typeface.DEFAULT
+            letterSpacing = 0.08f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(
+            "NEURAL FACIAL EMBEDDINGS BY FACENET-512  •  UNSUPERVISED CLUSTERING BY RECIPROCAL KNN",
+            canvasWidth / 2f,
+            creditsStartY + 85f,
+            billingBody
+        )
+        canvas.drawText(
+            "BEST SHOT SELECTION ENGINE  •  ML KIT VISION DETECTOR  •  HARDWARE ACCELERATED RENDER",
+            canvasWidth / 2f,
+            creditsStartY + 120f,
+            billingBody
+        )
+
+        val sealPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FFB95F")
+            textSize = 15f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.18f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(
+            "— OFFICIAL CAST COMPILATION —",
+            canvasWidth / 2f,
+            creditsStartY + 175f,
+            sealPaint
+        )
 
         return output
     }

@@ -36,6 +36,12 @@ class FaceClusterer(
     /** Centroid similarity threshold for post-CW merge pass. */
     private val centroidMergeThreshold: Float = 0.50f
 ) {
+    /** Secondary constructor for backward compatibility with unit tests. */
+    constructor(similarityThreshold: Float, maxGapForAppearanceMs: Long = 800L) : this(
+        minEdgeSimilarity = similarityThreshold,
+        maxGapForAppearanceMs = maxGapForAppearanceMs,
+        centroidMergeThreshold = similarityThreshold
+    )
 
     companion object {
         private const val TAG = "FaceClusterer"

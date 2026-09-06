@@ -15,24 +15,24 @@ import androidx.core.view.WindowCompat
  * This gives us full control over the premium dark aesthetic we want.
  */
 private val AppColorScheme = darkColorScheme(
-    primary              = PrimaryDefault,
-    onPrimary            = OnPrimary,
-    primaryContainer     = PrimaryDark,
-    onPrimaryContainer   = PrimaryLight,
-    secondary            = SecondaryDefault,
-    onSecondary          = OnSecondary,
-    secondaryContainer   = Color(0xFF2B2200),
-    onSecondaryContainer = SecondaryDefault,
-    background           = AppBackground,
-    onBackground         = OnSurface,
-    surface              = SurfaceCard,
-    onSurface            = OnSurface,
-    surfaceVariant       = SurfaceElevated,
-    onSurfaceVariant     = OnSurfaceMuted,
-    outline              = Outline,
-    outlineVariant       = OutlineVariant,
-    error                = ErrorColor,
-    onError              = OnPrimary
+    primary              = StitchPrimary,
+    onPrimary            = StitchOnPrimary,
+    primaryContainer     = StitchPrimaryContainer,
+    onPrimaryContainer   = StitchOnPrimaryContainer,
+    secondary            = StitchSecondary,
+    onSecondary          = StitchOnSecondary,
+    secondaryContainer   = StitchSecondaryContainer,
+    onSecondaryContainer = StitchOnSecondaryContainer,
+    background           = StitchBackground,
+    onBackground         = StitchOnSurface,
+    surface              = StitchSurface,
+    onSurface            = StitchOnSurface,
+    surfaceVariant       = StitchSurfaceContainerHigh,
+    onSurfaceVariant     = StitchOnSurfaceVariant,
+    outline              = StitchOutline,
+    outlineVariant       = StitchOutlineVariant,
+    error                = StitchError,
+    onError              = StitchOnError
 )
 
 @Composable
