@@ -224,6 +224,16 @@ class MainViewModel(
         processingJob?.cancel()
     }
 
+    /** Cancel processing and reset state back to Home/Import view. */
+    fun resetToHome() {
+        processingJob?.cancel()
+        _progress.value = ProcessingProgress(stage = ProcessingStage.IDLE)
+        _clusters.value = emptyList()
+        _extractedFaces.value = emptyList()
+        _collageBitmap.value = null
+        _hiddenClusterIds.value = emptySet()
+    }
+
     // ─── Cluster editing ──────────────────────────────────────────────────────
 
     /** Hide (soft-delete) a cluster from the visible list and collage. */
