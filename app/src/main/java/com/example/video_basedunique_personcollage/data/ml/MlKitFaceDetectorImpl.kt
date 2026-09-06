@@ -68,21 +68,9 @@ class MlKitFaceDetectorImpl : FaceDetector {
                 ) return@mapNotNull null
 
                 // ── Boundary guard ──────────────────────────────────────────
-                // Reject faces severely clipped by the frame edges (entering/exiting shots).
-                val marginX = (frame.bitmap.width * 0.015f).toInt()
-                val marginY = (frame.bitmap.height * 0.015f).toInt()
-                if (face.boundingBox.left <= marginX ||
-                    face.boundingBox.right >= frame.bitmap.width - marginX ||
-                    face.boundingBox.top <= marginY ||
-                    face.boundingBox.bottom >= frame.bitmap.height - marginY
-                ) {
-                    // If clipped by border, only allow if face is substantially inside frame
-                    val isSeverelyClipped = face.boundingBox.left <= 2 ||
-                            face.boundingBox.right >= frame.bitmap.width - 2 ||
-                            face.boundingBox.top <= 2 ||
-                            face.boundingBox.bottom >= frame.bitmap.height - 2
-                    if (isSeverelyClipped) return@mapNotNull null
-                }
+                // Removed: we used to discard faces touching the frame border (isSeverelyClipped).
+                // However, the 5-Landmark Requirement below naturally filters out actual half-faces.
+                // Rejecting faces just because they hit the edge was causing large, legitimate faces to be dropped.
 
                 // ── Pose gate ────────────────────────────────────────────────
                 // Yaw > 45° → steep profile, unidentifiable / split cluster.
@@ -124,9 +112,9 @@ class MlKitFaceDetectorImpl : FaceDetector {
                 val isFrontal = kotlin.math.abs(face.headEulerAngleY) < 25f
                 val isLarge = face.boundingBox.width() >= frame.bitmap.width * 0.10f
                 val sharpnessGate = when {
-                    isFrontal && isLarge -> 16.0   // Large frontal — allow some motion blur
+                    isLarge              -> 16.0   // Large faces carry enough detail to survive slight motion blur, even at angles
                     isFrontal            -> 19.0   // Small frontal
-                    else                 -> 22.0   // Slight angle
+                    else                 -> 22.0   // Small angled
                 }
                 if (sharpness < sharpnessGate) return@mapNotNull null
 
