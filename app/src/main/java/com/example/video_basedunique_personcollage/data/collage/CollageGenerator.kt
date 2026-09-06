@@ -150,11 +150,15 @@ object CollageGenerator {
         val headerHeight = 150
         val footerHeight = 60
         val padding = 40f
-        val spacing = 28f
+        val spacing = 26f
 
         val availableWidth = canvasWidth - (padding * 2) - (spacing * (cols - 1))
         val cardWidth = availableWidth / cols
-        val cardHeight = cardWidth * 1.25f // classic polaroid proportion
+        val photoMargin = 16f
+        val photoWidth = cardWidth - (photoMargin * 2)
+        val photoHeight = photoWidth // Classic 1:1 square photo area
+        val photoBottomMargin = 68f // Classic wide bottom chin
+        val cardHeight = (photoMargin * 2) + photoHeight + (photoBottomMargin - photoMargin)
 
         val canvasHeight = (headerHeight + footerHeight + (padding * 2) + (rows * cardHeight) + ((rows - 1) * spacing)).toInt()
 
@@ -184,15 +188,18 @@ object CollageGenerator {
             textSize = 22f
             typeface = Typeface.DEFAULT
         }
-        canvas.drawText("${items.size} unique individuals captured", padding, 112f, subPaint)
+        canvas.drawText("${items.size} unique moments captured", padding, 112f, subPaint)
 
         // Polaroid card styling
         val polaroidBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#FAF8F5")
             setShadowLayer(14f, 0f, 8f, Color.parseColor("#50000000"))
         }
-        val photoMargin = 16f
-        val photoBottomMargin = cardHeight * 0.18f
+        val photoBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E4DFD7")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f
+        }
         val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
 
         // Slight organic rotations for Polaroid realism
@@ -203,10 +210,16 @@ object CollageGenerator {
             val r = i / cols
             val c = i % cols
 
-            val left = padding + c * (cardWidth + spacing)
+            // Symmetrically center the last row if it has fewer cards than cols
+            val itemsInThisRow = if (r == rows - 1 && count % cols != 0) count % cols else cols
+            val rowOffsetX = if (r == rows - 1 && count % cols != 0) {
+                ((cols - itemsInThisRow) * (cardWidth + spacing)) / 2f
+            } else 0f
+
+            val left = padding + rowOffsetX + c * (cardWidth + spacing)
             val top = headerHeight + padding + r * (cardHeight + spacing)
-            val centerX = left + cardWidth / 2
-            val centerY = top + cardHeight / 2
+            val centerX = left + cardWidth / 2f
+            val centerY = top + cardHeight / 2f
 
             val rot = rotations[i % rotations.size]
 
@@ -217,14 +230,22 @@ object CollageGenerator {
             val cardRect = RectF(left, top, left + cardWidth, top + cardHeight)
             canvas.drawRoundRect(cardRect, 10f, 10f, polaroidBg)
 
-            // Inner Photo Rect (clean white polaroid border, no text)
+            // Inner Photo Rect: strictly inside the white frame
             val photoRect = RectF(
                 left + photoMargin,
                 top + photoMargin,
-                left + cardWidth - photoMargin,
-                top + cardHeight - photoBottomMargin
+                left + photoMargin + photoWidth,
+                top + photoMargin + photoHeight
             )
+
+            // Explicitly clip photo rendering to photoRect so it can NEVER leak outside
+            canvas.save()
+            canvas.clipRect(photoRect)
             drawBitmapFitCenter(canvas, item.bitmap, photoRect, cardPaint)
+            canvas.restore()
+
+            // Subtle inner inset border around photo
+            canvas.drawRect(photoRect, photoBorder)
 
             canvas.restore()
         }
@@ -480,18 +501,24 @@ object CollageGenerator {
         val dstW = dst.width()
         val dstH = dst.height()
 
-        val scale = max(dstW / srcW, dstH / srcH)
-        val scaledW = srcW * scale
-        val scaledH = srcH * scale
+        if (srcW <= 0f || srcH <= 0f || dstW <= 0f || dstH <= 0f) return
 
-        val dx = dst.left + (dstW - scaledW) / 2f
-        val dy = dst.top + (dstH - scaledH) / 2f
+        val srcAspect = srcW / srcH
+        val dstAspect = dstW / dstH
 
-        val matrix = Matrix().apply {
-            postScale(scale, scale)
-            postTranslate(dx, dy)
+        val srcRect = if (srcAspect > dstAspect) {
+            // Source is wider than destination -> crop horizontal overflow
+            val targetSrcW = srcH * dstAspect
+            val cropX = (srcW - targetSrcW) / 2f
+            Rect(cropX.toInt(), 0, (cropX + targetSrcW).toInt(), src.height)
+        } else {
+            // Source is taller than destination -> crop vertical overflow
+            val targetSrcH = srcW / dstAspect
+            val cropY = (srcH - targetSrcH) / 2f
+            Rect(0, cropY.toInt(), src.width, (cropY + targetSrcH).toInt())
         }
-        canvas.drawBitmap(src, matrix, paint)
+
+        canvas.drawBitmap(src, srcRect, dst, paint)
     }
 
     private fun createPlaceholderBitmap(msg: String): Bitmap {

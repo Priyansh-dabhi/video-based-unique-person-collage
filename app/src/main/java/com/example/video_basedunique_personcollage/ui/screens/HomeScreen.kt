@@ -142,6 +142,9 @@ fun HomeScreen(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                             )
                         },
+                        onHomeClick = {
+                            viewModel.resetToHome()
+                        },
                         onMergeClick = { targetId, sourceId ->
                             viewModel.mergeClusters(targetId, sourceId)
                         },

@@ -62,7 +62,7 @@ fun BrandHeader(
 
             Column(verticalArrangement = Arrangement.Center) {
                 Text(
-                    text = "FACECOLLAGE AI",
+                    text = "FACECOLLAGE AI STUDIO",
                     color = StitchSecondary,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,

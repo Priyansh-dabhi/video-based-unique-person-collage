@@ -37,6 +37,7 @@ fun ResultsScreenView(
     totalFacesDetected: Int,
     onCreateCollage: () -> Unit,
     onNewImport: () -> Unit,
+    onHomeClick: () -> Unit = {},
     onMergeClick: (targetId: Int, sourceId: Int) -> Unit,
     onToggleExclude: (clusterId: Int) -> Unit,
     modifier: Modifier = Modifier
@@ -62,8 +63,44 @@ fun ResultsScreenView(
         BrandHeader(
             title = "Recognized Cast",
             trailingAction = {
-                TextButton(onClick = onNewImport) {
-                    Text(text = "New Video", color = StitchSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Home Screen Button
+                    OutlinedButton(
+                        onClick = onHomeClick,
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = StitchSurfaceContainerHigh,
+                            contentColor = StitchOnSurface
+                        ),
+                        border = BorderStroke(1.dp, StitchOutlineVariant.copy(alpha = 0.5f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(text = "⌂", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = StitchOnSurface)
+                            Text(text = "Home", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = StitchOnSurface)
+                        }
+                    }
+
+                    // New Video Button
+                    FilledTonalButton(
+                        onClick = onNewImport,
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = StitchPrimaryContainer.copy(alpha = 0.35f),
+                            contentColor = StitchPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(text = "+ Video", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         )
