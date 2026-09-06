@@ -1,31 +1,30 @@
 package com.example.video_basedunique_personcollage.ui.screens
 
 import android.widget.Toast
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.video_basedunique_personcollage.data.model.CollageStyle
 import com.example.video_basedunique_personcollage.ui.MainViewModel
+import com.example.video_basedunique_personcollage.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollagePreviewDialog(
     viewModel: MainViewModel,
@@ -37,168 +36,198 @@ fun CollagePreviewDialog(
     val isGenerating by viewModel.isGeneratingCollage.collectAsState()
     val exportMessage by viewModel.exportMessage.collectAsState()
 
-    // Trigger initial generation if not already generated
     LaunchedEffect(Unit) {
-        if (collageBitmap == null) {
-            viewModel.generateCollage(selectedStyle)
-        }
+        viewModel.generateCollage(selectedStyle)
     }
 
-    // Show toast for export feedback
     LaunchedEffect(exportMessage) {
         exportMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             viewModel.clearExportMessage()
         }
     }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
+                .background(AppBackground)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Header Bar
+            Column(modifier = Modifier.fillMaxSize()) {
+
+                // ── Top bar ────────────────────────────────────────────────────
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceCard)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
                         Text(
-                            text = "Person Collage ✨",
+                            "Collage Studio ✨",
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.ExtraBold,
+                            color = OnSurface
                         )
                         Text(
-                            text = "Hero shots of unique individuals",
+                            "Preview & customize your collage",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = OnSurfaceMuted
                         )
                     }
-
                     IconButton(onClick = onDismiss) {
-                        Text(
-                            text = "✕",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Text("✕", fontSize = 20.sp, color = OnSurfaceMuted)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Style Selector Chips
+                // ── Style selector ─────────────────────────────────────────────
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceCard)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     CollageStyle.values().forEach { style ->
                         val isSelected = style == selectedStyle
-                        FilterChip(
+                        StyleChip(
+                            label = style.displayName,
                             selected = isSelected,
+                            enabled = !isGenerating,
                             onClick = {
                                 if (!isGenerating && style != selectedStyle) {
                                     viewModel.generateCollage(style)
                                 }
-                            },
-                            label = {
-                                Text(
-                                    text = style.displayName,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp)
+                            }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Divider(color = OutlineVariant, thickness = 1.dp)
 
-                // Preview Area
+                // ── Collage preview ────────────────────────────────────────────
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.85f))
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
+                        .background(Color(0xFF07080A)),
                     contentAlignment = Alignment.Center
                 ) {
-                    val bmp = collageBitmap
-                    if (isGenerating || bmp == null) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Creating collage...",
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
-                        }
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState()),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Generated Collage",
+                    AnimatedContent(
+                        targetState = isGenerating,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "collageContent"
+                    ) { generating ->
+                        if (generating || collageBitmap == null) {
+                            GeneratingPlaceholder()
+                        } else {
+                            val scrollState = rememberScrollState()
+                            Column(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                contentScale = ContentScale.Fit
-                            )
+                                    .fillMaxSize()
+                                    .verticalScroll(scrollState),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Image(
+                                    bitmap = collageBitmap!!.asImageBitmap(),
+                                    contentDescription = "Collage Preview",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Bottom Action Buttons (Save & Share)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                // ── Action bar ─────────────────────────────────────────────────
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceCard)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Save to Photos Button
-                    Button(
-                        onClick = { viewModel.saveCollageToGallery(context) },
-                        enabled = !isGenerating && collageBitmap != null,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(text = "⬇ Save to Photos", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Button(
+                            onClick = { viewModel.saveCollageToGallery(context) },
+                            enabled = !isGenerating && collageBitmap != null,
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryDefault)
+                        ) {
+                            Text(
+                                "⬇  Save",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.shareCollage(context) },
+                            enabled = !isGenerating && collageBitmap != null,
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.5.dp, PrimaryDefault),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryDefault)
+                        ) {
+                            Text("↗  Share", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
                     }
 
-                    // Share Button
-                    OutlinedButton(
-                        onClick = { viewModel.shareCollage(context) },
-                        enabled = !isGenerating && collageBitmap != null,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(text = "↗ Share", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Text(
+                        text = "Saved to Pictures / UniquePersonCollage",
+                        fontSize = 11.sp,
+                        color = OnSurfaceMuted,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StyleChip(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) PrimaryDefault else SurfaceElevated,
+        border = if (selected) null else BorderStroke(1.dp, OutlineVariant)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) Color.White else OnSurfaceMuted
+        )
+    }
+}
+
+@Composable
+private fun GeneratingPlaceholder() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        CircularProgressIndicator(color = PrimaryDefault, strokeWidth = 3.dp)
+        Spacer(Modifier.height(16.dp))
+        Text("Rendering collage…", color = OnSurfaceMuted, fontSize = 14.sp)
     }
 }
