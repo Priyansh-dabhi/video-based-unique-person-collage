@@ -94,7 +94,7 @@ object CollageGenerator {
             textSize = 24f
             typeface = Typeface.DEFAULT
         }
-        canvas.drawText("$count Unique Personalities • Curated Collection", padding, 115f, subPaint)
+        canvas.drawText("$count Unique People", padding, 115f, subPaint)
 
         // Draw each face card (clean, edge-to-edge photo without text overlays)
         val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
