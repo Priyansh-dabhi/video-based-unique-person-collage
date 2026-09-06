@@ -62,6 +62,11 @@ object BestShotSelector {
             0.0
         }
 
-        return sharpnessComponent + smileComponent + eyeComponent - blinkPenalty - posePenalty
+        // 5. Size component (rewards large, prominent faces, heavily penalizes small split-screen faces)
+        val area = face.originalBoundingBox.width().toFloat() * face.originalBoundingBox.height().toFloat()
+        // 150,000 pixels is roughly a 300x500 bounding box (typical large portrait face)
+        val sizeComponent = min(1.0, area / 150000.0) * 50.0
+
+        return sharpnessComponent + smileComponent + eyeComponent + sizeComponent - blinkPenalty - posePenalty
     }
 }
