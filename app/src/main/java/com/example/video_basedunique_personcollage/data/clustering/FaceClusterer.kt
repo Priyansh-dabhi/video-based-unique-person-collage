@@ -34,7 +34,7 @@ class FaceClusterer(
     /** Max Chinese Whispers iterations. */
     private val maxIterations: Int = 50,
     /** Centroid similarity threshold for post-CW merge pass. */
-    private val centroidMergeThreshold: Float = 0.58f
+    private val centroidMergeThreshold: Float = 0.50f
 ) {
 
     companion object {
