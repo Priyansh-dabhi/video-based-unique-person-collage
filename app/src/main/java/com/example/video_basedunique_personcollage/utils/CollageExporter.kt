@@ -131,9 +131,16 @@ object CollageExporter {
 
     fun shareVideo(context: Context, videoUri: Uri) {
         try {
-            // videoUri is expected to be a file:// URI from cache, so we need a FileProvider URI for it.
-            val file = File(videoUri.path ?: return)
-            
+            val filePath = videoUri.path ?: run {
+                android.util.Log.e("CollageExporter", "videoUri has null path: $videoUri")
+                return
+            }
+            val file = File(filePath)
+            if (!file.exists()) {
+                android.util.Log.e("CollageExporter", "Story video file does not exist at: $filePath")
+                return
+            }
+
             val contentUri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -143,16 +150,18 @@ object CollageExporter {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "video/mp4"
                 putExtra(Intent.EXTRA_STREAM, contentUri)
+                clipData = android.content.ClipData.newRawUri("Story Video", contentUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
             val chooser = Intent.createChooser(shareIntent, "Share Unique Person Story").apply {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("CollageExporter", "Failed to share story video", e)
         }
     }
 }
