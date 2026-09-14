@@ -159,4 +159,43 @@ object BitmapUtils {
         val mean = sum / count
         return (sumSq / count) - (mean * mean)
     }
+
+    /**
+     * Crops a 9:16 vertical portrait region from a full video frame focused on a single person's
+     * face and torso, excluding other people who might be present in a dual-person or group frame.
+     */
+    fun isolatePersonPortrait(fullFrame: Bitmap, faceBox: Rect): Bitmap {
+        if (fullFrame.isRecycled) return fullFrame
+
+        val frameW = fullFrame.width
+        val frameH = fullFrame.height
+
+        // Desired vertical height: generous portrait framing (head, shoulders, torso)
+        var targetH = (faceBox.height() * 3.8f).coerceIn(frameH * 0.60f, frameH.toFloat())
+        var targetW = targetH * (9f / 16f)
+
+        if (targetW > frameW) {
+            targetW = frameW.toFloat()
+            targetH = targetW * (16f / 9f)
+        }
+
+        // Center horizontally on the person's face
+        val cropLeft = (faceBox.centerX() - targetW / 2f).coerceIn(0f, (frameW - targetW).coerceAtLeast(0f))
+
+        // Place face comfortably in upper third
+        val desiredTop = faceBox.top - (faceBox.height() * 0.55f)
+        val cropTop = desiredTop.coerceIn(0f, (frameH - targetH).coerceAtLeast(0f))
+
+        val finalW = targetW.toInt().coerceAtMost(frameW - cropLeft.toInt())
+        val finalH = targetH.toInt().coerceAtMost(frameH - cropTop.toInt())
+
+        if (finalW <= 0 || finalH <= 0) return fullFrame
+
+        return try {
+            Bitmap.createBitmap(fullFrame, cropLeft.toInt(), cropTop.toInt(), finalW, finalH)
+        } catch (e: Exception) {
+            fullFrame
+        }
+    }
 }
+

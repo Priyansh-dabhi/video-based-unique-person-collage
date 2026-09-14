@@ -12,7 +12,10 @@ Built as a production-grade solution for the **Video-based unique-person collage
 - **Advanced 3-Stage ML Pipeline**: Combines Google ML Kit face detection, FaceNet-512 deep metric learning, and reciprocal graph clustering.
 - **Smart "Best Shot" Selector**: Multi-metric objective quality scoring (sharpness, smile confidence, eye-openness, frontality, and resolution) to choose the optimal hero shot for each person.
 - **Dynamic Collage Studio**: Clean, text-free photo tiles across multiple aspect ratios (Modern Grid, Polaroid Board, and 9:16 Vertical Story Poster).
-- **Hardware-Accelerated Export**: Real-time canvas rendering with 1-tap gallery saving (`Pictures/UniquePersonCollage`) and native Android share sheet integration.
+- **Story Video Generator**: Generate a 9:16 Instagram-style animated video montage of all unique people using native Android `MediaCodec` and `MediaMuxer`.
+- **Intelligent Solo-Person Isolation**: Automatically prioritizes solo frames and isolates single individuals from dual-person/group frames for cinematic presentation.
+- **Interactive Candidate Selector**: 1-tap selection to customize each person's hero shot directly from their detected appearances filmstrip.
+- **Hardware-Accelerated Export**: Real-time canvas rendering with 1-tap gallery saving (`Pictures/UniquePersonCollage` or `Movies/UniquePersonCollage`) and native Android share sheet integration.
 
 ---
 
@@ -24,7 +27,7 @@ Achieving high-accuracy identity grouping across video sequences with motion blu
 [Video Frame (Media3)]
          │
          ▼
-[Google ML Kit Vision] ──> Strict 5-landmark gate (eyes, nose, mouth) + sharpness filter
+[Google ML Kit Vision] ──> Strict 5-landmark gate (eyes, nose, mouth) + multi-face tracking
          │
          ▼
 [FaceNet-512 TFLite]   ──> 160×160 aligned crop ──> 512-D L2-normalized unit sphere vector
@@ -39,12 +42,13 @@ Achieving high-accuracy identity grouping across video sequences with motion blu
 [Centroid Merge Pass]  ──> Minimum cosine similarity 0.50 with cross-validation gate
          │
          ▼
-[Best Shot Selector]   ──> Sharpness + Smile + Eye-Open + Head-Euler-Angle ranking
+[Best Shot Selector]   ──> Sharpness + Solo Bonus + Smile + Eye-Open + Head-Euler-Angle ranking
 ```
 
 ### 1. Face Detection & Quality Filtering (Google ML Kit)
 - **Engine**: Google ML Kit Vision Face Detector.
 - **Strict Landmark Gate**: Faces are accepted only when both eyes, nose base, and mouth corners are detected. This automatically rejects partial faces, profile silhouettes, and false positives.
+- **Multi-Face Context Tracking**: Tracks `totalFacesInFrame` for each detection to distinguish pure solo frames from dual-person or group shots.
 - **Adaptive Sharpness & Size Gates**: Faces with bounding box sizes below 80×80 or severe motion blur are discarded before embedding to protect cluster purity.
 
 ### 2. Deep Metric Learning (FaceNet-512)
@@ -68,12 +72,16 @@ An "appearance" is defined as a continuous, sustained visibility window. The sys
 ### 5. Multi-Factor "Best Shot" Selector
 Rather than picking the first or largest face, every face crop in a cluster is evaluated using a composite quality formula:
 
-$$\text{Quality Score} = 0.35 \times S_{\text{sharpness}} + 0.25 \times P_{\text{smile}} + 0.20 \times \bar{O}_{\text{eyes}} + 0.10 \times F_{\text{frontality}} + 0.10 \times A_{\text{area}}$$
+$$\text{Quality Score} = 0.80 \times S_{\text{sharpness}} + B_{\text{solo}} + 0.20 \times P_{\text{smile}} + 0.25 \times \bar{O}_{\text{eyes}} + 0.25 \times A_{\text{area}} - P_{\text{pose}} - P_{\text{blink}} - P_{\text{blur}} - P_{\text{multi-face}}$$
 
-- **$S_{\text{sharpness}}$**: Laplacian variance on grayscale bitmap.
+- **$S_{\text{sharpness}}$**: Laplacian variance on grayscale bitmap (prioritized at weight $0.80$).
+- **$B_{\text{solo}}$**: $+30.0$ bonus for solo-person frames (`totalFacesInFrame == 1`).
+- **$P_{\text{multi-face}}$**: Heavy penalty ($-50.0+$) for frames containing multiple individuals, ensuring the hero shot represents only that single person.
+- **$P_{\text{blur}}$**: Penalty for soft frames ($< 25.0$ sharpness) to reject motion-blurred frames.
 - **$P_{\text{smile}}$**: ML Kit smile probability $[0.0, 1.0]$.
 - **$\bar{O}_{\text{eyes}}$**: Average of left and right eye-open probabilities $[0.0, 1.0]$.
-- **$F_{\text{frontality}}$**: Deviation penalty based on head Euler angles $(Y, Z)$.
+- **$P_{\text{blink}}$**: Heavy penalty if either eye is closed.
+- **$P_{\text{pose}}$**: Deviation penalty based on head Euler angles $(X, Y, Z)$.
 - **$A_{\text{area}}$**: Normalized face crop bounding box resolution.
 
 ---
@@ -124,6 +132,7 @@ The application's interface was completely transformed from a basic prototype in
 - **2-Column Analytical Metrics Bar**: Instant readout of unique individuals identified, processing velocity (ms/frame), and cluster confidence.
 - **Interactive Sorting**: Dynamic toggle between "Most Appearances" (descending order) and "Earliest Chronological Detection".
 - **Story Avatar Rings**: Instagram/TikTok-inspired gradient rings highlighting the hero "best shot" with candidate thumbnail filmstrip inspection.
+- **Interactive Candidate Selection**: Tapping any candidate shot in the horizontal appearance filmstrip promotes it to the primary hero shot (with a gold `★ Best` badge), instantly updating the person's avatar, static collage slot, and Story Video frame.
 - **Non-Destructive Curation**: In-place soft-hide and cluster merge options allowing full user control.
 
 #### 4. Dynamic Collage Studio & Export
@@ -133,7 +142,13 @@ The application's interface was completely transformed from a basic prototype in
   - Built specifically for Instagram Stories, TikTok, and vertical mobile wallpapers.
   - Double gold editorial frame insets, serif headline typography ("THE ENSEMBLE"), and custom studio billing credits.
   - Symmetrical multi-hero mosaic (prominent top cards + balanced lower tier) with pristine, text-free face crops.
-- **Hardware-Accelerated Canvas Rendering**: Exports crisp 1080p/4K bitmaps directly to `Pictures/UniquePersonCollage` and integrates with the native Android system share sheet.
+- **Story Video Generator**: 
+  - Generates a fully animated, 9:16 Instagram-style Story MP4.
+  - Features smooth Ken Burns (slow zoom `1.05x` to `1.15x`) and crossfade transitions between unique individuals.
+  - **High-Precision Frame Extraction**: Uses `MediaMetadataRetriever.OPTION_CLOSEST` to render the exact crisp frame evaluated during detection.
+  - **Automatic Solo-Person Isolation**: Automatically isolates and crops single-person portrait windows when individuals only appear in dual-person or group shots.
+  - Computed 100% on-device using native `MediaCodec` (AVC/H.264) and `MediaMuxer` without external heavy FFmpeg dependencies.
+- **Hardware-Accelerated Export**: Exports crisp 1080p/4K bitmaps directly to `Pictures/UniquePersonCollage` and Story MP4s to `Movies/UniquePersonCollage`, integrating natively with the Android system share sheet.
 
 ---
 

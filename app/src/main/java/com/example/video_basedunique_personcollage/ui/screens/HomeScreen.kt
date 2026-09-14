@@ -32,6 +32,10 @@ fun HomeScreen(
     val extractedFaces by viewModel.extractedFaces.collectAsState()
     val hiddenIds by viewModel.hiddenClusterIds.collectAsState()
     val exportMessage by viewModel.exportMessage.collectAsState()
+    
+    val isGeneratingStory by viewModel.isGeneratingStory.collectAsState()
+    val storyVideoResultUri by viewModel.storyVideoResultUri.collectAsState()
+    val storyProgress by viewModel.storyProgress.collectAsState()
 
     val visibleClusters = remember(clusters, hiddenIds) {
         clusters.filter { it.id !in hiddenIds }
@@ -137,6 +141,7 @@ fun HomeScreen(
                         clusters = visibleClusters,
                         totalFacesDetected = progress.facesDetected,
                         onCreateCollage = { showCollageDialog = true },
+                        onCreateStory = { viewModel.generateStoryVideo(context) },
                         onNewImport = {
                             videoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
@@ -151,6 +156,9 @@ fun HomeScreen(
                         onToggleExclude = { clusterId ->
                             viewModel.hideCluster(clusterId)
                         },
+                        onSelectCandidate = { clusterId, faceIndex ->
+                            viewModel.selectRepresentativeFace(clusterId, faceIndex)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -161,6 +169,43 @@ fun HomeScreen(
             CollagePreviewDialog(
                 viewModel = viewModel,
                 onDismiss = { showCollageDialog = false }
+            )
+        }
+        
+        if (isGeneratingStory) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Generating Story...", color = StitchOnSurface, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { storyProgress },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                            color = StitchPrimary,
+                            trackColor = StitchSurfaceContainerHigh
+                        )
+                        Text(
+                            text = "${(storyProgress * 100).toInt()}%",
+                            color = StitchOnSurfaceVariant,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                confirmButton = {},
+                containerColor = StitchSurfaceContainer
+            )
+        }
+        
+        storyVideoResultUri?.let { uri ->
+            StoryPreviewDialog(
+                videoUri = uri,
+                onDismiss = { viewModel.clearStoryResult() },
+                onSave = { viewModel.saveStoryToGallery(context) },
+                onShare = { viewModel.shareStory(context) }
             )
         }
     }

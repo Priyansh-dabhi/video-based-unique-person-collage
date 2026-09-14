@@ -231,9 +231,7 @@ class FaceClusterer(
             appearanceCount = calculateAppearances(faces, maxGapForAppearanceMs)
         )
         cluster.faceResults.sortWith(compareByDescending { face ->
-            val totalAngle = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
-            val anglePenalty = if (totalAngle > 15f) (totalAngle - 15f) * 1.5 else 0.0
-            face.sharpnessScore - anglePenalty
+            com.example.video_basedunique_personcollage.data.collage.BestShotSelector.calculatePhotogenicScore(face)
         })
         return cluster
     }

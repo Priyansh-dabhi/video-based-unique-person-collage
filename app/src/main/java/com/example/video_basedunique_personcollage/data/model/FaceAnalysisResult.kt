@@ -27,5 +27,6 @@ data class FaceAnalysisResult(
     val sharpnessScore: Double = 0.0,
     val landmarks: FaceLandmarks5? = null,
     val alignedBitmap: Bitmap? = null,
-    var embedding: FloatArray? = null // Populated by FaceEmbedder
+    var embedding: FloatArray? = null, // Populated by FaceEmbedder
+    val totalFacesInFrame: Int = 1
 )

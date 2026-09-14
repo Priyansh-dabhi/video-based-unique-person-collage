@@ -19,13 +19,13 @@ import kotlin.math.min
 object BestShotSelector {
 
     /**
-     * Returns the single highest-scoring face in the cluster.
-     * Falls back to the representative bitmap or first face if available.
+     * Returns the hero face for this cluster.
+     * Respects user-selected candidate at index 0, or falls back to the highest-scoring face.
      */
     fun selectBestShot(cluster: PersonCluster): FaceAnalysisResult? {
         if (cluster.faceResults.isEmpty()) return null
 
-        return cluster.faceResults.maxByOrNull { calculatePhotogenicScore(it) }
+        return cluster.faceResults.firstOrNull() ?: cluster.faceResults.maxByOrNull { calculatePhotogenicScore(it) }
     }
 
     /**
@@ -33,18 +33,34 @@ object BestShotSelector {
      * Range typically 0..100+ (higher is better).
      */
     fun calculatePhotogenicScore(face: FaceAnalysisResult): Double {
-        // 1. Sharpness component (0..100 capped)
-        val sharpnessComponent = min(100.0, max(0.0, face.sharpnessScore)) * 0.40
+        // 1. Sharpness component (0..100 capped) - heavily prioritized
+        val sharpnessComponent = min(100.0, max(0.0, face.sharpnessScore)) * 0.80
 
-        // 2. Smile component (0..1 -> 0..25 points)
+        // Penalty for low sharpness / blur: heavily penalize soft or motion-blurred detections
+        val blurPenalty = if (face.sharpnessScore < 25.0) {
+            (25.0 - face.sharpnessScore) * 4.0
+        } else {
+            0.0
+        }
+
+        // 2. Solo-person priority: Strongly favor frames where this person is the ONLY person in frame.
+        // Heavily penalize dual-person or group frames so that the system picks a single-person frame.
+        val multiFacePenalty = if (face.totalFacesInFrame > 1) {
+            50.0 + (face.totalFacesInFrame - 1) * 25.0
+        } else {
+            0.0
+        }
+        val soloBonus = if (face.totalFacesInFrame == 1) 30.0 else 0.0
+
+        // 3. Smile component (0..1 -> 0..20 points)
         val smileProb = (face.smileProbability ?: 0f).coerceIn(0f, 1f)
-        val smileComponent = smileProb * 25.0
+        val smileComponent = smileProb * 20.0
 
-        // 3. Eye openness component (both eyes open, no blinking) -> 0..30 points
+        // 4. Eye openness component (both eyes open, no blinking) -> 0..25 points
         val leftEye = (face.leftEyeOpenProbability ?: 0.6f).coerceIn(0f, 1f)
         val rightEye = (face.rightEyeOpenProbability ?: 0.6f).coerceIn(0f, 1f)
         val bothEyesOpen = min(leftEye, rightEye)
-        val eyeComponent = bothEyesOpen * 30.0
+        val eyeComponent = bothEyesOpen * 25.0
 
         // Blink / closed eyes heavy penalty (prevents blinks being chosen as hero shots)
         val blinkPenalty = if (bothEyesOpen < 0.45f) {
@@ -53,7 +69,7 @@ object BestShotSelector {
             0.0
         }
 
-        // 4. Frontal pose bonus / penalty
+        // 5. Frontal pose bonus / penalty
         // Total head rotation angle: pitch (X) + yaw (Y) + roll (Z)
         val totalRotation = abs(face.headEulerAngleX) + abs(face.headEulerAngleY) + abs(face.headEulerAngleZ)
         val posePenalty = if (totalRotation > 10f) {
@@ -62,11 +78,10 @@ object BestShotSelector {
             0.0
         }
 
-        // 5. Size component (rewards large, prominent faces, heavily penalizes small split-screen faces)
+        // 6. Size component (rewards prominent portrait faces)
         val area = face.originalBoundingBox.width().toFloat() * face.originalBoundingBox.height().toFloat()
-        // 150,000 pixels is roughly a 300x500 bounding box (typical large portrait face)
-        val sizeComponent = min(1.0, area / 150000.0) * 50.0
+        val sizeComponent = min(1.0, area / 150000.0) * 25.0
 
-        return sharpnessComponent + smileComponent + eyeComponent + sizeComponent - blinkPenalty - posePenalty
+        return sharpnessComponent + soloBonus + smileComponent + eyeComponent + sizeComponent - blinkPenalty - posePenalty - blurPenalty - multiFacePenalty
     }
 }

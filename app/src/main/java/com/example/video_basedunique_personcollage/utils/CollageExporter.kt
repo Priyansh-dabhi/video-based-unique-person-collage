@@ -88,4 +88,71 @@ object CollageExporter {
             e.printStackTrace()
         }
     }
+
+    fun saveVideoToGallery(context: Context, videoUri: Uri): Result<Uri> {
+        return runCatching {
+            val filename = "unique_people_story_${System.currentTimeMillis()}.mp4"
+
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, filename)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/UniquePersonCollage")
+                    put(MediaStore.Video.Media.IS_PENDING, 1)
+                }
+            }
+
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
+
+            val resolver = context.contentResolver
+            val destUri = resolver.insert(collection, contentValues)
+                ?: throw IllegalStateException("Could not create MediaStore entry")
+
+            resolver.openOutputStream(destUri).use { outputStream ->
+                if (outputStream == null) throw IllegalStateException("Could not open output stream")
+                resolver.openInputStream(videoUri)?.use { inputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                resolver.update(destUri, contentValues, null, null)
+            }
+
+            destUri
+        }
+    }
+
+    fun shareVideo(context: Context, videoUri: Uri) {
+        try {
+            // videoUri is expected to be a file:// URI from cache, so we need a FileProvider URI for it.
+            val file = File(videoUri.path ?: return)
+            
+            val contentUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "video/mp4"
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            val chooser = Intent.createChooser(shareIntent, "Share Unique Person Story").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }

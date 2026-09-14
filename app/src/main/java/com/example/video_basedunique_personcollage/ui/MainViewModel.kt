@@ -61,6 +61,15 @@ class MainViewModel(
     private val _isGeneratingCollage = MutableStateFlow(false)
     val isGeneratingCollage: StateFlow<Boolean> = _isGeneratingCollage.asStateFlow()
 
+    private val _isGeneratingStory = MutableStateFlow(false)
+    val isGeneratingStory: StateFlow<Boolean> = _isGeneratingStory.asStateFlow()
+
+    private val _storyVideoResultUri = MutableStateFlow<Uri?>(null)
+    val storyVideoResultUri: StateFlow<Uri?> = _storyVideoResultUri.asStateFlow()
+
+    private val _storyProgress = MutableStateFlow(0f)
+    val storyProgress: StateFlow<Float> = _storyProgress.asStateFlow()
+
     private val _exportMessage = MutableStateFlow<String?>(null)
     val exportMessage: StateFlow<String?> = _exportMessage.asStateFlow()
 
@@ -72,6 +81,8 @@ class MainViewModel(
     val visibleClusters: StateFlow<List<PersonCluster>> get() = _clusters // Filtered in UI
 
     private var processingJob: Job? = null
+    
+    private var currentVideoUri: Uri? = null
 
     // ─── Convenience helpers (backward-compatible with screens) ───────────────
     val isProcessing: StateFlow<Boolean> get() = MutableStateFlow(false).also {
@@ -82,6 +93,7 @@ class MainViewModel(
     fun processVideo(context: Context, uri: Uri) {
         processingJob?.cancel()
         processingJob = viewModelScope.launch {
+            currentVideoUri = uri
             _clusters.value = emptyList()
             _extractedFaces.value = emptyList()
             _collageBitmap.value = null
@@ -231,6 +243,7 @@ class MainViewModel(
         _clusters.value = emptyList()
         _extractedFaces.value = emptyList()
         _collageBitmap.value = null
+        _storyVideoResultUri.value = null
         _hiddenClusterIds.value = emptySet()
     }
 
@@ -261,6 +274,22 @@ class MainViewModel(
         _clusters.value = current
         // Also remove source from hidden list if present
         _hiddenClusterIds.value = _hiddenClusterIds.value - sourceId
+    }
+
+    fun selectRepresentativeFace(clusterId: Int, faceIndex: Int) {
+        val current = _clusters.value.toMutableList()
+        val clusterIndex = current.indexOfFirst { it.id == clusterId }
+        if (clusterIndex != -1) {
+            val cluster = current[clusterIndex]
+            if (faceIndex in cluster.faceResults.indices && faceIndex != 0) {
+                val updatedFaces = cluster.faceResults.toMutableList()
+                val selectedFace = updatedFaces.removeAt(faceIndex)
+                updatedFaces.add(0, selectedFace)
+                val newCluster = cluster.copy(faceResults = updatedFaces)
+                current[clusterIndex] = newCluster
+                _clusters.value = current
+            }
+        }
     }
 
     // ─── Collage ──────────────────────────────────────────────────────────────
@@ -294,6 +323,107 @@ class MainViewModel(
     fun shareCollage(context: Context) {
         val bitmap = _collageBitmap.value ?: return
         CollageExporter.shareCollage(context, bitmap)
+    }
+
+    // ─── Story Video ──────────────────────────────────────────────────────────
+
+    fun generateStoryVideo(context: Context) {
+        val hidden = _hiddenClusterIds.value
+        val activeClusters = _clusters.value.filter { it.id !in hidden }
+        if (activeClusters.isEmpty()) return
+
+        viewModelScope.launch {
+            _isGeneratingStory.value = true
+            _storyProgress.value = 0f
+            
+            val uriToExtract = currentVideoUri
+            val bitmaps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val retriever = android.media.MediaMetadataRetriever()
+                if (uriToExtract != null) {
+                    try {
+                        retriever.setDataSource(context, uriToExtract)
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainViewModel", "Failed to set data source for Story Video", e)
+                    }
+                }
+
+                val frames = activeClusters.mapNotNull { cluster ->
+                    val bestShot = com.example.video_basedunique_personcollage.data.collage.BestShotSelector.selectBestShot(cluster)
+                    
+                    var fullFrame: Bitmap? = null
+                    if (bestShot != null && uriToExtract != null) {
+                        try {
+                            val timeUs = bestShot.timestampMs * 1000L
+                            // OPTION_CLOSEST decodes forward to the exact frame rather than jumping to a distant I-frame
+                            val rawFrame = retriever.getFrameAtTime(timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST)
+                            if (rawFrame != null) {
+                                // If the frame contains multiple people (dual-person / group shot),
+                                // crop an isolated 9:16 portrait region centered on this person so only they are shown!
+                                fullFrame = if (bestShot.totalFacesInFrame > 1) {
+                                    com.example.video_basedunique_personcollage.utils.BitmapUtils.isolatePersonPortrait(
+                                        rawFrame,
+                                        bestShot.originalBoundingBox
+                                    )
+                                } else {
+                                    rawFrame
+                                }
+                                android.util.Log.d("MainViewModel", "Extracted crisp frame for person ${cluster.id} at ${bestShot.timestampMs}ms (facesInFrame=${bestShot.totalFacesInFrame}): ${fullFrame.width}x${fullFrame.height}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("MainViewModel", "Failed to extract frame at ${bestShot.timestampMs}", e)
+                        }
+                    }
+                    
+                    fullFrame ?: bestShot?.croppedBitmap ?: bestShot?.alignedBitmap ?: cluster.representativeBitmap
+                }
+
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    // Ignore
+                }
+
+                frames
+            }
+
+            val result = com.example.video_basedunique_personcollage.data.story.StoryVideoGenerator.generateStoryVideo(
+                context = context,
+                bitmaps = bitmaps,
+                onProgress = { progress ->
+                    _storyProgress.value = progress
+                }
+            )
+
+            when (result) {
+                is com.example.video_basedunique_personcollage.data.story.StoryVideoResult.Success -> {
+                    _storyVideoResultUri.value = result.videoUri
+                }
+                is com.example.video_basedunique_personcollage.data.story.StoryVideoResult.Error -> {
+                    _exportMessage.value = "Story failed: ${result.message}"
+                }
+            }
+            
+            _isGeneratingStory.value = false
+        }
+    }
+
+    fun clearStoryResult() {
+        _storyVideoResultUri.value = null
+    }
+
+    fun saveStoryToGallery(context: Context) {
+        val uri = _storyVideoResultUri.value ?: return
+        val result = CollageExporter.saveVideoToGallery(context, uri)
+        _exportMessage.value = if (result.isSuccess) {
+            "✓ Saved to Gallery → Movies/UniquePersonCollage"
+        } else {
+            "Failed to save: ${result.exceptionOrNull()?.message}"
+        }
+    }
+
+    fun shareStory(context: Context) {
+        val uri = _storyVideoResultUri.value ?: return
+        CollageExporter.shareVideo(context, uri)
     }
 
     fun clearExportMessage() { _exportMessage.value = null }

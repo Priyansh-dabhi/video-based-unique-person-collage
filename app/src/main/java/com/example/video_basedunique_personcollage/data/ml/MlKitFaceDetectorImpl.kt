@@ -131,7 +131,8 @@ class MlKitFaceDetectorImpl : FaceDetector {
                     timestampMs = frame.timestampMs,
                     sharpnessScore = sharpness,
                     landmarks = landmarks,
-                    alignedBitmap = alignedBitmap
+                    alignedBitmap = alignedBitmap,
+                    totalFacesInFrame = allBoxes.size
                 )
             }
         } catch (e: Exception) {

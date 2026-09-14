@@ -36,14 +36,17 @@ fun ResultsScreenView(
     clusters: List<PersonCluster>,
     totalFacesDetected: Int,
     onCreateCollage: () -> Unit,
+    onCreateStory: () -> Unit,
     onNewImport: () -> Unit,
     onHomeClick: () -> Unit = {},
     onMergeClick: (targetId: Int, sourceId: Int) -> Unit,
     onToggleExclude: (clusterId: Int) -> Unit,
+    onSelectCandidate: (clusterId: Int, faceIndex: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var sortByAppearances by remember { mutableStateOf(true) }
     var mergeTargetClusterId by remember { mutableStateOf<Int?>(null) }
+    var showExportOptionsDialog by remember { mutableStateOf(false) }
 
     val sortedClusters = remember(clusters, sortByAppearances) {
         if (sortByAppearances) {
@@ -227,7 +230,7 @@ fun ResultsScreenView(
             // ── Primary Action CTA: Create Person Collage ──────────────────────
             item {
                 Button(
-                    onClick = onCreateCollage,
+                    onClick = { showExportOptionsDialog = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
@@ -256,7 +259,7 @@ fun ResultsScreenView(
                         ) {
                             Text(text = "✨", fontSize = 18.sp)
                             Text(
-                                text = "Create Person Collage",
+                                text = "Create Export",
                                 color = StitchOnPrimaryContainer,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
@@ -347,7 +350,8 @@ fun ResultsScreenView(
                     },
                     onExclude = {
                         onToggleExclude(cluster.id)
-                    }
+                    },
+                    onSelectCandidate = onSelectCandidate
                 )
             }
 
@@ -415,6 +419,71 @@ fun ResultsScreenView(
             containerColor = StitchSurfaceContainer
         )
     }
+
+    if (showExportOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportOptionsDialog = false },
+            title = {
+                Text(
+                    text = "Select Export Format",
+                    color = StitchOnSurface,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Static Collage Option
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(StitchSurfaceContainerHigh)
+                            .clickable {
+                                showExportOptionsDialog = false
+                                onCreateCollage()
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "🖼️", fontSize = 24.sp)
+                        Column {
+                            Text("Static Collage", color = StitchOnSurface, fontWeight = FontWeight.Bold)
+                            Text("A printable high-res image grid", color = StitchOnSurfaceVariant, fontSize = 12.sp)
+                        }
+                    }
+
+                    // Story Video Option
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(StitchSurfaceContainerHigh)
+                            .clickable {
+                                showExportOptionsDialog = false
+                                onCreateStory()
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "🎞️", fontSize = 24.sp)
+                        Column {
+                            Text("Story Video", color = StitchOnSurface, fontWeight = FontWeight.Bold)
+                            Text("A 9:16 animated Instagram-style video", color = StitchOnSurfaceVariant, fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportOptionsDialog = false }) {
+                    Text("Cancel", color = StitchOnSurfaceVariant)
+                }
+            },
+            containerColor = StitchSurfaceContainer
+        )
+    }
 }
 
 @Composable
@@ -424,7 +493,8 @@ private fun PersonCard(
     isLead: Boolean,
     bestShotBitmap: Bitmap?,
     onMergeWith: () -> Unit,
-    onExclude: () -> Unit
+    onExclude: () -> Unit,
+    onSelectCandidate: (clusterId: Int, faceIndex: Int) -> Unit = { _, _ -> }
 ) {
     Column(
         modifier = Modifier
@@ -557,10 +627,11 @@ private fun PersonCard(
                             .clip(RoundedCornerShape(10.dp))
                             .background(StitchSurfaceContainerHigh)
                             .border(
-                                width = if (i == 0) 1.5.dp else 0.5.dp,
-                                color = if (i == 0) StitchSecondary.copy(alpha = 0.8f) else StitchOutlineVariant.copy(alpha = 0.4f),
+                                width = if (i == 0) 2.dp else 0.5.dp,
+                                color = if (i == 0) StitchSecondary else StitchOutlineVariant.copy(alpha = 0.4f),
                                 shape = RoundedCornerShape(10.dp)
                             )
+                            .clickable { onSelectCandidate(cluster.id, i) }
                     ) {
                         Image(
                             bitmap = bmp.asImageBitmap(),
@@ -568,6 +639,24 @@ private fun PersonCard(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+
+                        if (i == 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(3.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(StitchSecondary)
+                                    .padding(horizontal = 3.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "★ Best",
+                                    color = Color.Black,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
 
                         // Subtle timestamp tag
                         val sec = (face.timestampMs / 1000).toInt()
