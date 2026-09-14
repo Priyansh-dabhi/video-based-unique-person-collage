@@ -2,6 +2,7 @@ package com.example.video_basedunique_personcollage.ui.screens
 
 import android.net.Uri
 import android.widget.VideoView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -247,23 +248,25 @@ fun StoryPreviewDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Button(
+                        OutlinedButton(
                             onClick = onSave,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp),
+                                .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
+                            colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = StitchSurfaceContainerHigh,
-                                contentColor = Color.White
-                            )
+                                contentColor = StitchOnSurface
+                            ),
+                            border = BorderStroke(1.dp, StitchOutlineVariant.copy(alpha = 0.5f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("💾", fontSize = 15.sp)
-                                Text("Save to Gallery", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("↓", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text("Save Video", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
                             }
                         }
 
@@ -271,19 +274,20 @@ fun StoryPreviewDialog(
                             onClick = onShare,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp),
+                                .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = StitchPrimary,
                                 contentColor = StitchOnPrimary
-                            )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("↗", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                                Text("Share Story", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("↗", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("Share Story", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
                             }
                         }
                     }
